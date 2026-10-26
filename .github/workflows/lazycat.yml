@@ -1,4 +1,4 @@
-name: Sync upstream and publish LazyCat application
+name: Build and publish LazyCat application
 
 on:
   # Daily upstream check; GitHub Actions cron is UTC (CST = UTC+8)
