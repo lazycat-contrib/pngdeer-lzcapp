@@ -13,12 +13,18 @@
 被 gitignore），所以需要在 CI 里现场构建：
 
 1. [`build.sh`](build.sh)（`lzc-build.yml` 的 buildscript）克隆上游对应 tag →
-   安装 clang / rustup（stable + nightly）/ wasm-bindgen-cli → 运行上游的
-   `web/build.sh` 产出 **单线程**（`web/pkg`）与 **多线程**（`web/pkg-mt`）两套 WASM
-   → 组装 `site/`
+   用 runner 已有的 rustup（stable + nightly）和 clang 装好 wasm32 工具链、
+   装上与上游 `web/wasm/Cargo.toml` 固定版本一致的 wasm-bindgen-cli →
+   运行上游的 `web/build.sh` 产出 **单线程**（`web/pkg`）与 **多线程**（`web/pkg-mt`）
+   两套 WASM → 组装 `site/`
 2. `contentdir: ./site` 把静态站打包进 LPK
 3. [`lzc-manifest.yml`](lzc-manifest.yml) 用平台内置文件服务
    （`backend: file:///lzcapp/pkg/content/`）提供页面
+
+构建脚本刻意**不使用 apt/apk**：LazyCat Action 的 buildscript 以 runner 普通用户
+身份执行，装不了系统包。CI 镜像自带 rustup 与 clang 16/17/18，够用；上游
+`web/build.sh` 按 `LLVM_BIN` 目录拼无后缀的 `clang`/`llvm-ar` 名字，而镜像里只有
+`llvm-ar-18`，所以脚本会建一个临时目录放软链再调用。
 
 ### 关于多线程
 
@@ -31,6 +37,8 @@ Cross-Origin-Embedder-Policy: require-corp
 ```
 
 若这些头未生效，上游会自动降级为单线程构建——功能完整，只是大图压缩更慢。
+
+本地实测（736 KB 的样例图）：单线程 5.2 s，多线程 3.2 s，输出 254 KB（省 65%）。
 
 ## 版本与发布
 
