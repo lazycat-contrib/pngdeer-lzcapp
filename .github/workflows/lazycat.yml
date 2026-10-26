@@ -1,0 +1,74 @@
+name: Sync upstream and publish LazyCat application
+
+on:
+  # Daily upstream check; GitHub Actions cron is UTC (CST = UTC+8)
+  schedule:
+    - cron: "41 14 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "要发布的版本（留空则自动检查上游最新 tag；如 0.1.1）"
+        type: string
+        required: false
+        default: ""
+  push:
+    branches: [main]
+    paths:
+      - .github/lazycat-action.yml
+      - .github/workflows/lazycat.yml
+      - build.sh
+      - lzc-build.yml
+      - lzc-manifest.yml
+      - package.yml
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # git 版本源不会自动发现上游 tag，这里比对上游最新 tag：
+  # 有新版本则 bump package.yml 并 push，push 事件触发下方 lazycat 发布。
+  sync-upstream:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.version == '')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Sync upstream version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # 上游 tag 形如 v0.1.1，package.yml 版本形如 0.1.1
+          RAW="$(gh api repos/heydeer/pngdeer/tags --jq '.[0].name' 2>/dev/null || true)"
+          if [ -z "$RAW" ]; then
+            echo "no upstream tag found; nothing to do"
+            exit 0
+          fi
+          LATEST="${RAW#v}"
+          CURRENT="$(sed -n 's/^version: *//p' package.yml)"
+          echo "upstream=$LATEST current=$CURRENT"
+          if [ -z "$LATEST" ] || [ "$LATEST" = "$CURRENT" ]; then
+            echo "no update needed"
+            exit 0
+          fi
+          sed -i "s/^version: .*/version: $LATEST/" package.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.yml
+          git commit -m "chore: bump to upstream pngdeer $LATEST"
+          git push
+
+  lazycat:
+    # 发布由 sync 产生的 push 触发；手动触发时需显式填版本（避免与 sync 竞态）
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.version != '')
+    uses: ca-x/lazycat-github-action/.github/workflows/lazycat.yml@v1
+    with:
+      operation: auto
+      config: .github/lazycat-action.yml
+      versioned-release-asset: true
+      version: ${{ inputs.version }}
+    secrets:
+      APPSTORE_URL: ${{ secrets.APPSTORE_URL }}
+      APPSTORE_TOKEN: ${{ secrets.APPSTORE_TOKEN }}
+      APP_ID: ${{ secrets.APP_ID }}
+      PRIVATE_STORE_GROUP_CODES: ${{ secrets.PRIVATE_STORE_GROUP_CODES }}

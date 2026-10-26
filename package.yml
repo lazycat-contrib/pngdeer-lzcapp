@@ -1,0 +1,18 @@
+package: cloud.lazycat.app.pngdeer
+version: 0.1.1
+name: pngdeer
+description: "Lossy PNG compression that picks the quality for each image, running entirely on your device via WebAssembly"
+min_os_version: "1.5.0"
+homepage: https://github.com/heydeer/pngdeer
+author: heydeer
+license: MIT
+locales:
+  zh:
+    name: "pngdeer"
+    description: "有损 PNG 压缩：逐图挑选合适的质量，压缩在浏览器本地用 WebAssembly 完成，图片不上传"
+  zh_CN:
+    name: "pngdeer"
+    description: "有损 PNG 压缩：逐图挑选合适的质量，压缩在浏览器本地用 WebAssembly 完成，图片不上传"
+  en:
+    name: "pngdeer"
+    description: "Lossy PNG compression that picks the quality for each image, running entirely on your device via WebAssembly"

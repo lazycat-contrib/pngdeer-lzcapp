@@ -1,0 +1,26 @@
+application:
+  subdomain: pngdeer
+  multi_instance: false
+  public_path:
+    - /
+  upstreams:
+    - location: /
+      backend: file:///lzcapp/pkg/content/
+  injects:
+    # 多线程 WebAssembly 构建（web/pkg-mt）需要跨源隔离：SharedArrayBuffer 只有在
+    # 页面 crossOriginIsolated 时才可用。这里给所有响应补上 COOP/COEP 头。
+    # 没有这两个头时上游会优雅降级为单线程构建（功能完整，只是慢一些）。
+    - id: cross-origin-isolation
+      on: response
+      auth_required: false
+      when:
+        - /*
+      do:
+        - src: |
+            try {
+              ctx.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+              ctx.headers.set("Cross-Origin-Embedder-Policy", "require-corp");
+              ctx.headers.set("Cross-Origin-Resource-Policy", "same-origin");
+            } catch (error) {
+              console.log("coi headers:", error);
+            }

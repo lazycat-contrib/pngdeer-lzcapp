@@ -1,0 +1,29 @@
+version: 1
+
+project:
+  root: .
+  build_config: lzc-build.yml
+  package_file: package.yml
+  output: dist/pngdeer.lpk
+  target_arch: amd64
+
+# 版本来自本仓库 package.yml（静态站无镜像）；build.sh 按版本号取上游 tag，
+# 在 CI 里构建 WebAssembly 并组装站点。
+update:
+  strategy: publish
+  allow_downgrade: false
+  version_source:
+    type: git
+
+build:
+  run_buildscript: true
+
+stores:
+  official:
+    # 仅发布喵喵（私有）商店
+    enabled: false
+  private:
+    enabled: true
+    skip_if_version_exists: true
+    name: pngdeer
+    summary: "有损 PNG 压缩：逐图挑选质量，浏览器本地 WebAssembly 压缩，图片不上传"
