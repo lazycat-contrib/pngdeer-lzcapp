@@ -54,9 +54,10 @@ if ! command -v rustup >/dev/null 2>&1; then
   exit 1
 fi
 
-# wasm32 需要 clang/llvm-ar：oxipng 的 libdeflate 是 C，要能编到 wasm32
+# wasm32 需要 clang/llvm-ar：oxipng 的 libdeflate 是 C，要能编到 wasm32。
+# CI 镜像里只有带版本后缀的 clang-18 / llvm-ar-18，没有无后缀的 llvm-ar，
+# 所以先按同版本号找 llvm-ar，找不到再退回通用候选。
 CC_WASM=""
-AR_WASM=""
 for candidate in /usr/bin/clang-18 /usr/bin/clang-17 /usr/bin/clang-16 /usr/bin/clang /usr/local/swift/usr/bin/clang; do
   if [ -x "$candidate" ] && "$candidate" -print-targets 2>/dev/null | grep -q "wasm32"; then
     CC_WASM="$candidate"
@@ -67,16 +68,17 @@ if [ -z "$CC_WASM" ]; then
   echo "ERROR: no clang with the wasm32 target found (need clang 16+)" >&2
   exit 1
 fi
-AR_WASM="$(dirname "$CC_WASM")/llvm-ar"
-if [ ! -x "$AR_WASM" ]; then
-  for candidate in /usr/bin/llvm-ar-18 /usr/bin/llvm-ar-17 /usr/bin/llvm-ar-16 /usr/bin/llvm-ar; do
-    if [ -x "$candidate" ]; then
-      AR_WASM="$candidate"
-      break
-    fi
-  done
-fi
-if [ ! -x "$AR_WASM" ]; then
+CC_DIR="$(dirname "$CC_WASM")"
+CC_SUFFIX="${CC_WASM##*/clang}"   # "-18" 或 ""（无后缀）
+AR_WASM=""
+for candidate in "${CC_DIR}/llvm-ar${CC_SUFFIX}" "${CC_DIR}/llvm-ar" \
+                 /usr/bin/llvm-ar-18 /usr/bin/llvm-ar-17 /usr/bin/llvm-ar-16 /usr/bin/llvm-ar; do
+  if [ -x "$candidate" ]; then
+    AR_WASM="$candidate"
+    break
+  fi
+done
+if [ -z "$AR_WASM" ]; then
   echo "ERROR: llvm-ar is required to build the wasm32 libdeflate" >&2
   exit 1
 fi
@@ -112,7 +114,13 @@ fi
 wasm-bindgen --version
 
 echo "==> building WebAssembly packages"
-LLVM_BIN="$(dirname "$CC_WASM")" sh web/build.sh
+# 上游 web/build.sh 从 LLVM_BIN 目录里拼出无后缀的 clang/llvm-ar，而 CI 镜像里
+# 只有带版本后缀的 clang-18/llvm-ar-18。这里做一个临时目录，用软链补上无后缀的名字。
+TOOLCHAIN_DIR="$(mktemp -d)"
+ln -sf "$CC_WASM" "${TOOLCHAIN_DIR}/clang"
+ln -sf "$AR_WASM" "${TOOLCHAIN_DIR}/llvm-ar"
+LLVM_BIN="$TOOLCHAIN_DIR" sh web/build.sh
+rm -rf "$TOOLCHAIN_DIR"
 
 # ---- 组装静态站 ----
 echo "==> assembling the static site"
